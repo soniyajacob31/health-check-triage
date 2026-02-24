@@ -794,8 +794,33 @@ SYMPTOM_DIFFERENTIALS = {
 LIKELIHOOD_ORDER = {"Very common": 1, "Common": 2, "Less common": 3, "Uncommon": 4, "Rare": 5}
 
 
+_SERIOUS_MARKERS = {
+    "emergency", "medical emergency", "requires", "drainage",
+    "heart attack", "stroke", "tia", "dissection", "embolism",
+    "hemorrhage", "meningitis", "sepsis", "obstruction", "ectopic",
+    "detachment", "glaucoma", "cauda equina", "intracranial",
+    "fracture", "concussion", "appendicitis", "cholecystitis",
+    "pyelonephritis", "pancreatitis", "heart failure",
+}
+
+
+def _acuity_score(dx, level):
+    """Lower score = more relevant to the recommendation level.
+
+    For ER/UC-level recommendations, serious diagnoses that need to be ruled
+    out are the ones *driving* the recommendation, so they rank first.
+    For lower-acuity levels, common benign diagnoses rank first.
+    """
+    text = (dx["diagnosis"] + " " + dx["notes"]).lower()
+    is_serious = any(m in text for m in _SERIOUS_MARKERS)
+
+    if level <= 2:
+        return 0 if is_serious else 2
+    return 2 if is_serious else 0
+
+
 def _build_differential(selected_symptoms, patient_state, level):
-    """Build a differential diagnosis list based on patient symptoms and demographics."""
+    """Return the top 3 diagnoses most likely driving the recommendation."""
     differentials = []
     seen_dx = set()
 
@@ -805,7 +830,6 @@ def _build_differential(selected_symptoms, patient_state, level):
                 entry = dict(dx)
                 entry["source_symptom"] = sym_id
 
-                # Adjust notes based on demographics
                 age = patient_state.age or 40
                 sex = patient_state.sex or "unknown"
                 pmh = set(patient_state.pmh) if patient_state.pmh else set()
@@ -828,8 +852,11 @@ def _build_differential(selected_symptoms, patient_state, level):
                 differentials.append(entry)
                 seen_dx.add(dx["diagnosis"])
 
-    differentials.sort(key=lambda d: LIKELIHOOD_ORDER.get(d["likelihood"], 3))
-    return differentials[:12]
+    differentials.sort(key=lambda d: (
+        _acuity_score(d, level),
+        LIKELIHOOD_ORDER.get(d["likelihood"], 3),
+    ))
+    return differentials[:3]
 
 
 def _promote(likelihood):
