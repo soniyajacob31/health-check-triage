@@ -192,10 +192,24 @@
         {% endif %}
     </form>
 
-    <!-- Help note -->
-    <p class="text-xs text-gray-400 mt-auto pt-6 text-center">
-        Having trouble? Have someone help you, or call <strong>911</strong> if you need immediate help.
-    </p>
+    <!-- Back button + Help note -->
+    <div class="mt-auto pt-6 text-center">
+        {% if progress > 1 %}
+        <form action="/back" method="POST" class="inline">
+            <button type="submit"
+                    class="text-sm text-gray-400 hover:text-blue-600 transition-colors mb-3 inline-flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                </svg>
+                Go back
+            </button>
+        </form>
+        <br>
+        {% endif %}
+        <p class="text-xs text-gray-400">
+            Having trouble? Have someone help you, or call <strong>911</strong> if you need immediate help.
+        </p>
+    </div>
 </div>
 {% endblock %}
 

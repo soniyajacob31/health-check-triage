@@ -81,7 +81,6 @@ def start():
     state = PatientState()
     state.phase = "baseline"
     _save_state(state)
-    session["session_id"] = database.generate_session_id()
     session["_transcript_saved"] = False
     return redirect(url_for("interview"))
 
@@ -194,6 +193,43 @@ def answer():
     return redirect(url_for("interview"))
 
 
+@app.route("/back", methods=["POST"])
+def back():
+    """Go back to the previous question by undoing the last answer."""
+    state = _get_state()
+
+    if not state.interview_history:
+        return redirect(url_for("interview"))
+
+    last = state.interview_history.pop()
+    qid = last["question_id"]
+    state.interview_answers.pop(qid, None)
+
+    if qid == "name":
+        state.name = None
+    elif qid == "answering_for":
+        state.answering_for = None
+    elif qid == "answering_for_reason":
+        # Revert to "someone_else" so the reason question shows again
+        state.answering_for = "someone_else"
+        state.red_flag_triggered = None
+    elif qid == "age":
+        state.age = None
+    elif qid == "sex":
+        state.sex = None
+    elif qid == "symptoms":
+        state.symptom_text = ""
+        state.selected_symptoms = []
+    elif qid == "pmh":
+        state.pmh_text = ""
+        state.pmh = []
+    elif qid == "zip_code":
+        state.zip_code = None
+
+    _save_state(state)
+    return redirect(url_for("interview"))
+
+
 @app.route("/results")
 def results():
     state = _get_state()
@@ -201,12 +237,9 @@ def results():
     evidence = get_evidence(state, prediction)
 
     if not session.get("_transcript_saved"):
-        sid = session.get("session_id", database.generate_session_id())
-        try:
-            database.save_transcript(sid, state, prediction, evidence)
-        except Exception:
-            pass
-        session["_transcript_saved"] = True
+        saved = database.save_transcript(state, prediction, evidence)
+        if saved:
+            session["_transcript_saved"] = True
 
     return render_template(
         "results.html",
@@ -274,7 +307,7 @@ def admin_detail(transcript_id):
         return "Transcript not found", 404
     for key in ("selected_symptoms", "pmh", "interview_history",
                 "risk_pcts", "specialist_info", "escalation",
-                "red_flag", "risk_factors"):
+                "triage_summary", "red_flag", "risk_factors"):
         if t.get(key):
             try:
                 t[key] = json.loads(t[key])

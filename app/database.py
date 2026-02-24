@@ -29,7 +29,7 @@ def init_db():
     conn.execute("""
         CREATE TABLE IF NOT EXISTS transcripts (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id      TEXT UNIQUE NOT NULL,
+            session_id      TEXT NOT NULL,
             timestamp       TEXT NOT NULL,
             patient_name    TEXT,
             age             INTEGER,
@@ -60,11 +60,12 @@ def generate_session_id():
     return str(uuid.uuid4())
 
 
-def save_transcript(session_id, state, prediction, evidence):
+def save_transcript(state, prediction, evidence):
+    """Save a complete encounter. Always inserts a new row."""
     conn = _get_conn()
     try:
         conn.execute("""
-            INSERT OR IGNORE INTO transcripts (
+            INSERT INTO transcripts (
                 session_id, timestamp, patient_name, age, sex, zip_code,
                 answering_for, symptom_text, pmh_text, selected_symptoms,
                 pmh, interview_history, prediction_level, prediction_label,
@@ -72,7 +73,7 @@ def save_transcript(session_id, state, prediction, evidence):
                 triage_summary, red_flag, risk_factors
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            session_id,
+            generate_session_id(),
             datetime.now(timezone.utc).isoformat(),
             state.name,
             state.age,
@@ -90,11 +91,15 @@ def save_transcript(session_id, state, prediction, evidence):
             json.dumps(prediction.get("specialist", {})),
             evidence.get("reassurance", ""),
             json.dumps(evidence.get("escalation", [])),
-            evidence.get("triage_summary", ""),
+            json.dumps(evidence.get("triage_summary", "")),
             json.dumps(prediction.get("red_flag")) if prediction.get("red_flag") else None,
             json.dumps(prediction.get("risk_factors", [])),
         ))
         conn.commit()
+        return True
+    except Exception as e:
+        print(f"[Transcript] Error saving: {e}")
+        return False
     finally:
         conn.close()
 
