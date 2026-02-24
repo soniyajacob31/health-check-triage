@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcript #{{ t.id }} — Health Check Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <nav class="bg-white border-b border-gray-200 px-4 py-3">
+        <div class="max-w-4xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <a href="/admin/transcripts" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                </a>
+                <span class="font-bold text-gray-800 text-lg">Transcript #{{ t.id }}</span>
+            </div>
+            <span class="text-sm text-gray-400">{{ t.timestamp[:19] | replace('T', ' ') }} UTC</span>
+        </div>
+    </nav>
+
+    <main class="max-w-4xl mx-auto px-4 py-6 space-y-6">
+
+        <!-- Recommendation Banner -->
+        {% set lvl = t.prediction_level %}
+        <div class="rounded-xl p-5 text-white font-semibold text-lg
+            {% if lvl == 1 %}bg-red-600
+            {% elif lvl == 2 %}bg-orange-500
+            {% elif lvl == 3 %}bg-yellow-500 text-yellow-900
+            {% elif lvl == 4 %}bg-blue-600
+            {% else %}bg-green-600{% endif %}">
+            Level {{ lvl }}: {{ t.prediction_label }}
+        </div>
+
+        <!-- Demographics -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="font-semibold text-gray-800 mb-3">Demographics</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                    <span class="text-gray-500 block">Name</span>
+                    <span class="font-medium text-gray-800">{{ t.patient_name or '—' }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500 block">Age</span>
+                    <span class="font-medium text-gray-800">{{ t.age or '—' }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500 block">Sex</span>
+                    <span class="font-medium text-gray-800">{{ t.sex or '—' }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500 block">Zip Code</span>
+                    <span class="font-medium text-gray-800">{{ t.zip_code or '—' }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500 block">Answering For</span>
+                    <span class="font-medium text-gray-800">{{ t.answering_for or '—' }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500 block">Session ID</span>
+                    <span class="font-mono text-xs text-gray-600">{{ t.session_id[:8] }}...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Symptom & PMH Text -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="font-semibold text-gray-800 mb-3">Patient-Reported Input</h2>
+            <div class="space-y-3 text-sm">
+                <div>
+                    <span class="text-gray-500 block mb-1">Symptoms (free text)</span>
+                    <p class="bg-gray-50 rounded-lg p-3 text-gray-800">{{ t.symptom_text or '—' }}</p>
+                </div>
+                <div>
+                    <span class="text-gray-500 block mb-1">Medical History (free text)</span>
+                    <p class="bg-gray-50 rounded-lg p-3 text-gray-800">{{ t.pmh_text or '—' }}</p>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <span class="text-gray-500 block mb-1">Parsed Symptoms</span>
+                        {% if t.selected_symptoms %}
+                        <div class="flex flex-wrap gap-1">
+                            {% for s in t.selected_symptoms %}
+                            <span class="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">{{ s }}</span>
+                            {% endfor %}
+                        </div>
+                        {% else %}<span class="text-gray-400">—</span>{% endif %}
+                    </div>
+                    <div>
+                        <span class="text-gray-500 block mb-1">Parsed PMH</span>
+                        {% if t.pmh %}
+                        <div class="flex flex-wrap gap-1">
+                            {% for p in t.pmh %}
+                            <span class="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full">{{ p }}</span>
+                            {% endfor %}
+                        </div>
+                        {% else %}<span class="text-gray-400">—</span>{% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Full Interview Q&A -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="font-semibold text-gray-800 mb-3">Full Interview Transcript</h2>
+            {% if t.interview_history %}
+            <div class="space-y-3">
+                {% for item in t.interview_history %}
+                <div class="border-l-2 border-blue-300 pl-4 py-1">
+                    <p class="text-xs text-gray-400 mb-0.5">{{ item.question_id }}</p>
+                    <p class="text-sm font-medium text-gray-700">Q: {{ item.question_text }}</p>
+                    <p class="text-sm text-gray-800 mt-0.5">A: {{ item.answer_display if item.answer_display else item.answer }}</p>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-gray-400 text-sm">No interview history recorded.</p>
+            {% endif %}
+        </div>
+
+        <!-- Risk Percentages -->
+        {% if t.risk_pcts %}
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="font-semibold text-gray-800 mb-3">Risk Percentages</h2>
+            <div class="space-y-3">
+                {% for label, value in t.risk_pcts.items() %}
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="text-gray-600">{{ label | replace('_', ' ') | title }}</span>
+                        <span class="font-semibold">{{ value }}%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div class="h-2.5 rounded-full transition-all duration-700
+                            {% if value >= 50 %}bg-red-500{% elif value >= 25 %}bg-orange-400{% else %}bg-green-400{% endif %}"
+                             style="width: {{ [value, 100] | min }}%"></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Specialist Info -->
+        {% if t.specialist_info and t.specialist_info.specialist %}
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-5">
+            <h2 class="font-semibold text-blue-800 mb-2">Specialist Info</h2>
+            <p class="text-sm"><strong>Primary:</strong> {{ t.specialist_info.specialist }}</p>
+            {% if t.specialist_info.secondary %}
+            <p class="text-sm"><strong>Secondary:</strong> {{ t.specialist_info.secondary }}</p>
+            {% endif %}
+            {% if t.specialist_info.rationale %}
+            <p class="text-sm text-gray-600 mt-2">{{ t.specialist_info.rationale }}</p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Red Flag -->
+        {% if t.red_flag %}
+        <div class="bg-red-50 border border-red-200 rounded-xl p-5">
+            <h2 class="font-semibold text-red-800 mb-2">Red Flag Triggered</h2>
+            <p class="text-sm text-red-700"><strong>{{ t.red_flag.name }}</strong></p>
+            <p class="text-sm text-red-600 mt-1">{{ t.red_flag.message }}</p>
+        </div>
+        {% endif %}
+
+        <!-- Reassurance -->
+        {% if t.reassurance %}
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="font-semibold text-gray-800 mb-2">Reassurance Statement</h2>
+            <p class="text-sm text-gray-700 leading-relaxed">{{ t.reassurance }}</p>
+        </div>
+        {% endif %}
+
+        <!-- Escalation Statements -->
+        {% if t.escalation %}
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="font-semibold text-gray-800 mb-3">Escalation Statements</h2>
+            <div class="space-y-2">
+                {% for e in t.escalation %}
+                <div class="text-sm border-l-2 pl-3 py-1
+                    {% if e.severity == 'critical' %}border-red-400
+                    {% elif e.severity == 'urgent' %}border-orange-400
+                    {% else %}border-yellow-400{% endif %}">
+                    <span class="font-medium">If:</span> {{ e.condition }}
+                    <br><span class="font-medium">Then:</span> {{ e.action }}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Triage Summary -->
+        {% if t.triage_summary %}
+        <div class="bg-teal-50 border border-teal-200 rounded-xl p-5">
+            <h2 class="font-semibold text-teal-800 mb-2">Triage Nurse Summary</h2>
+            <div class="text-sm text-gray-700 whitespace-pre-line">{{ t.triage_summary }}</div>
+        </div>
+        {% endif %}
+
+        <!-- Risk Factors -->
+        {% if t.risk_factors %}
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 class="font-semibold text-gray-800 mb-2">Risk Factors</h2>
+            <ul class="list-disc list-inside text-sm text-gray-700 space-y-1">
+                {% for rf in t.risk_factors %}
+                <li>{{ rf }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <div class="text-center pt-4">
+            <a href="/admin/transcripts" class="text-sm text-blue-600 hover:text-blue-800">Back to all transcripts</a>
+        </div>
+    </main>
+</body>
+</html>

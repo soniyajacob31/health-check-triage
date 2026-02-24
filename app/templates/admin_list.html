@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcripts — Health Check Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <nav class="bg-white border-b border-gray-200 px-4 py-3">
+        <div class="max-w-6xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+                <span class="font-bold text-gray-800 text-lg">Transcript Log</span>
+                <span class="text-sm text-gray-400 ml-2">{{ total }} sessions</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="/admin/export/csv"
+                   class="text-sm bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg transition-colors">
+                    Export CSV
+                </a>
+                <a href="/admin/export/json"
+                   class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors">
+                    Export JSON
+                </a>
+                <a href="/admin/logout" class="text-sm text-gray-500 hover:text-gray-700 ml-2">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto px-4 py-6">
+        {% if transcripts %}
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-gray-50 border-b border-gray-200">
+                            <th class="text-left px-4 py-3 font-semibold text-gray-600">#</th>
+                            <th class="text-left px-4 py-3 font-semibold text-gray-600">Time</th>
+                            <th class="text-left px-4 py-3 font-semibold text-gray-600">Name</th>
+                            <th class="text-left px-4 py-3 font-semibold text-gray-600">Age</th>
+                            <th class="text-left px-4 py-3 font-semibold text-gray-600">Sex</th>
+                            <th class="text-left px-4 py-3 font-semibold text-gray-600">Symptoms</th>
+                            <th class="text-left px-4 py-3 font-semibold text-gray-600">Level</th>
+                            <th class="text-left px-4 py-3 font-semibold text-gray-600">Recommendation</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        {% for t in transcripts %}
+                        <tr class="hover:bg-blue-50 cursor-pointer transition-colors"
+                            onclick="window.location='/admin/transcripts/{{ t.id }}'">
+                            <td class="px-4 py-3 text-gray-500">{{ t.id }}</td>
+                            <td class="px-4 py-3 text-gray-600 whitespace-nowrap">
+                                {{ t.timestamp[:16] | replace('T', ' ') }}
+                            </td>
+                            <td class="px-4 py-3 font-medium text-gray-800">{{ t.patient_name or '—' }}</td>
+                            <td class="px-4 py-3 text-gray-600">{{ t.age or '—' }}</td>
+                            <td class="px-4 py-3 text-gray-600">{{ t.sex or '—' }}</td>
+                            <td class="px-4 py-3 text-gray-600 max-w-xs truncate" title="{{ t.symptom_text }}">
+                                {{ t.symptom_text or '—' }}
+                            </td>
+                            <td class="px-4 py-3">
+                                {% set lvl = t.prediction_level %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold
+                                    {% if lvl == 1 %}bg-red-100 text-red-800
+                                    {% elif lvl == 2 %}bg-orange-100 text-orange-800
+                                    {% elif lvl == 3 %}bg-yellow-100 text-yellow-800
+                                    {% elif lvl == 4 %}bg-blue-100 text-blue-800
+                                    {% else %}bg-green-100 text-green-800{% endif %}">
+                                    {{ lvl }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-gray-700 text-xs max-w-xs truncate">
+                                {{ t.prediction_label or '—' }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        {% if total_pages > 1 %}
+        <div class="flex justify-center items-center gap-2 mt-6">
+            {% if page > 1 %}
+            <a href="?page={{ page - 1 }}" class="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Previous</a>
+            {% endif %}
+            <span class="text-sm text-gray-500">Page {{ page }} of {{ total_pages }}</span>
+            {% if page < total_pages %}
+            <a href="?page={{ page + 1 }}" class="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Next</a>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+            <svg class="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <p class="text-gray-500">No transcripts yet. Completed sessions will appear here.</p>
+        </div>
+        {% endif %}
+    </main>
+</body>
+</html>

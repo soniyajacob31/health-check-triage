@@ -6,12 +6,15 @@ Manages the interview flow: welcome → baseline → follow-ups → results.
 """
 
 from flask import (
-    Flask, render_template, request, session, redirect, url_for, jsonify
+    Flask, render_template, request, session, redirect, url_for, jsonify,
+    Response, make_response,
 )
+from functools import wraps
 from .patient_state import PatientState
 from .interview_engine import TreeInterviewEngine
 from .model import predict
 from .evidence import get_evidence
+from . import database
 import json, os
 
 app = Flask(__name__,
@@ -19,7 +22,10 @@ app = Flask(__name__,
             static_folder=os.path.join(os.path.dirname(__file__), "static"))
 app.secret_key = os.environ.get("SECRET_KEY", "triage-app-dev-key-change-in-prod")
 
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "triage-admin-2026")
+
 engine = TreeInterviewEngine()
+database.init_db()
 
 
 def _get_state() -> PatientState:
@@ -75,6 +81,8 @@ def start():
     state = PatientState()
     state.phase = "baseline"
     _save_state(state)
+    session["session_id"] = database.generate_session_id()
+    session["_transcript_saved"] = False
     return redirect(url_for("interview"))
 
 
@@ -191,6 +199,15 @@ def results():
     state = _get_state()
     prediction = predict(state)
     evidence = get_evidence(state, prediction)
+
+    if not session.get("_transcript_saved"):
+        sid = session.get("session_id", database.generate_session_id())
+        try:
+            database.save_transcript(sid, state, prediction, evidence)
+        except Exception:
+            pass
+        session["_transcript_saved"] = True
+
     return render_template(
         "results.html",
         prediction=prediction,
@@ -203,3 +220,84 @@ def results():
 def restart():
     session.clear()
     return redirect(url_for("welcome"))
+
+
+# ---------------------------------------------------------------------------
+# Admin routes — password-protected transcript viewer
+# ---------------------------------------------------------------------------
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("admin_authenticated"):
+            return redirect(url_for("admin_login"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+@app.route("/admin", methods=["GET", "POST"])
+def admin_login():
+    error = None
+    if request.method == "POST":
+        if request.form.get("password") == ADMIN_PASSWORD:
+            session["admin_authenticated"] = True
+            return redirect(url_for("admin_list"))
+        error = "Incorrect password."
+    return render_template("admin_login.html", error=error)
+
+
+@app.route("/admin/logout")
+def admin_logout():
+    session.pop("admin_authenticated", None)
+    return redirect(url_for("admin_login"))
+
+
+@app.route("/admin/transcripts")
+@admin_required
+def admin_list():
+    page = request.args.get("page", 1, type=int)
+    transcripts, total, total_pages = database.get_transcripts(page=page)
+    return render_template(
+        "admin_list.html",
+        transcripts=transcripts,
+        page=page,
+        total=total,
+        total_pages=total_pages,
+    )
+
+
+@app.route("/admin/transcripts/<int:transcript_id>")
+@admin_required
+def admin_detail(transcript_id):
+    t = database.get_transcript_by_id(transcript_id)
+    if t is None:
+        return "Transcript not found", 404
+    for key in ("selected_symptoms", "pmh", "interview_history",
+                "risk_pcts", "specialist_info", "escalation",
+                "red_flag", "risk_factors"):
+        if t.get(key):
+            try:
+                t[key] = json.loads(t[key])
+            except (json.JSONDecodeError, TypeError):
+                pass
+    return render_template("admin_detail.html", t=t)
+
+
+@app.route("/admin/export/csv")
+@admin_required
+def admin_export_csv():
+    csv_data = database.export_all_csv()
+    resp = make_response(csv_data)
+    resp.headers["Content-Type"] = "text/csv"
+    resp.headers["Content-Disposition"] = "attachment; filename=transcripts.csv"
+    return resp
+
+
+@app.route("/admin/export/json")
+@admin_required
+def admin_export_json():
+    json_data = database.export_all_json()
+    resp = make_response(json_data)
+    resp.headers["Content-Type"] = "application/json"
+    resp.headers["Content-Disposition"] = "attachment; filename=transcripts.json"
+    return resp

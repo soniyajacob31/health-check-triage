@@ -21,6 +21,10 @@ Study1_Norepinephrine/
 Study2_ED_Phenotypes/
 Study3_ED_Triage_Tool/
 
+# Transcript database (contains session data)
+transcripts.db
+app/transcripts.db
+
 # Python
 __pycache__/
 *.pyc
